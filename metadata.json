@@ -1,0 +1,7 @@
+{
+  "name": "Nano Banana Pro Image Studio",
+  "description": "An advanced AI image manipulation and generation suite powered by Gemini, featuring facial preservation, AI Avatar seeds, and multi-subject compositing.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
