@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { AppMode } from '../types';
-import { Image as ImageIcon, Users, Zap } from 'lucide-react';
+import { Image as ImageIcon, Users, Zap, MessageSquare } from 'lucide-react';
 
 interface Props {
   onSelectMode: (mode: AppMode) => void;
@@ -19,26 +19,33 @@ const LandingPage: React.FC<Props> = ({ onSelectMode }) => {
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-8 w-full max-w-4xl">
+      <div className="grid md:grid-cols-3 gap-8 w-full max-w-6xl">
         <ModeCard 
-          title="Single Image Play"
-          description="Edit and experiment with a single photograph. Change backgrounds, add items, or swap styles."
+          title="Single Play"
+          description="Edit a single photograph. Swap styles, backgrounds, or items."
           icon={<ImageIcon size={32} />}
           onClick={() => onSelectMode(AppMode.SINGLE_PLAY)}
           color="yellow"
         />
         <ModeCard 
-          title="Multiple Image Play"
-          description="Combine subjects from different photos into a single cohesive group shot seamlessly."
+          title="Group Photo"
+          description="Combine subjects from different photos into a single cohesive shot."
           icon={<Users size={32} />}
           onClick={() => onSelectMode(AppMode.GROUP_PHOTO)}
           color="blue"
+        />
+        <ModeCard 
+          title="On the Go"
+          description="Chat with Google-backed intelligence. Analyze locations and generate from search data."
+          icon={<MessageSquare size={32} />}
+          onClick={() => onSelectMode(AppMode.ON_THE_GO)}
+          color="green"
         />
       </div>
 
       <div className="mt-20 flex items-center gap-8 opacity-40 grayscale pointer-events-none">
         <Zap size={20} />
-        <span className="text-xs font-bold tracking-[0.3em] uppercase">Powered by Nano Banana Pro</span>
+        <span className="text-xs font-bold tracking-[0.3em] uppercase text-white">Powered by Nano Banana Pro</span>
         <Zap size={20} />
       </div>
     </div>
@@ -46,8 +53,16 @@ const LandingPage: React.FC<Props> = ({ onSelectMode }) => {
 };
 
 const ModeCard = ({ title, description, icon, onClick, color }: any) => {
-  const colorClass = color === 'yellow' ? 'hover:border-yellow-500 group-hover:bg-yellow-500' : 'hover:border-blue-500 group-hover:bg-blue-500';
-  const shadowClass = color === 'yellow' ? 'hover:shadow-[0_0_40px_rgba(234,179,8,0.15)]' : 'hover:shadow-[0_0_40px_rgba(59,130,246,0.15)]';
+  let colorClass = 'hover:border-yellow-500 group-hover:bg-yellow-500';
+  let shadowClass = 'hover:shadow-[0_0_40px_rgba(234,179,8,0.15)]';
+  
+  if (color === 'blue') {
+    colorClass = 'hover:border-blue-500 group-hover:bg-blue-500';
+    shadowClass = 'hover:shadow-[0_0_40px_rgba(59,130,246,0.15)]';
+  } else if (color === 'green') {
+    colorClass = 'hover:border-emerald-500 group-hover:bg-emerald-500';
+    shadowClass = 'hover:shadow-[0_0_40px_rgba(16,185,129,0.15)]';
+  }
 
   return (
     <button 

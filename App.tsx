@@ -1,36 +1,124 @@
 
-import React, { useState, useEffect } from 'react';
-import { AppMode, AvatarSeed, UserState, GenSettings } from './types';
-import { generateImage, extractNeuralMemory } from './services/geminiService';
-import LandingPage from './components/LandingPage';
-import EditorWorkspace from './components/EditorWorkspace';
-import SeedPromptModal from './components/SeedPromptModal';
-import { Key, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { AppMode, AvatarSeed, UserState, GenSettings, GalleryItem } from './types.ts';
+import { generateImage, extractNeuralMemory } from './services/geminiService.ts';
+import LandingPage from './components/LandingPage.tsx';
+import EditorWorkspace from './components/EditorWorkspace.tsx';
+import OnTheGoWorkspace from './components/OnTheGoWorkspace.tsx';
+import SeedPromptModal from './components/SeedPromptModal.tsx';
+import { Sparkles } from 'lucide-react';
+
+interface HistoryState {
+  prompt: string;
+  settings: GenSettings;
+  negativePrompt: string;
+}
 
 const App: React.FC = () => {
   const [state, setState] = useState<UserState>({
     seeds: [],
     currentMode: AppMode.LANDING,
     isKeySelected: false,
-    negativePrompt: '',
-    promptHistory: [],
     settings: {
-      temperature: 0.9, 
+      temperature: 0.8, 
       variation: 0.5,
       faceFidelity: 0.85, 
+      strictness: 0.7,
       aspectRatio: "Original",
       numberOfImages: 1,
       imageSize: "1K",
       cameraAngle: "Default",
       pose: "Default"
-    }
+    },
+    negativePrompt: '',
+    promptHistory: [],
+    generatedGallery: [],
   });
+
+  const [prompt, setPrompt] = useState('');
+  const [history, setHistory] = useState<HistoryState[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const isUndoRedoing = useRef(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [showSeedModal, setShowSeedModal] = useState(false);
   const [pendingMode, setPendingMode] = useState<AppMode | null>(null);
   const [lastGeneratedImage, setLastGeneratedImage] = useState<string | null>(null);
   const [neuralMemory, setNeuralMemory] = useState<string>('');
+
+  const pushToHistory = useCallback((p: string, s: GenSettings, np: string) => {
+    if (isUndoRedoing.current) return;
+
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      const nextState = { prompt: p, settings: JSON.parse(JSON.stringify(s)), negativePrompt: np };
+      
+      if (newHistory.length > 0) {
+        const head = newHistory[newHistory.length - 1];
+        if (head.prompt === p && head.negativePrompt === np && JSON.stringify(head.settings) === JSON.stringify(s)) {
+          return prev;
+        }
+      }
+
+      const updated = [...newHistory, nextState].slice(-50);
+      setHistoryIndex(updated.length - 1);
+      return updated;
+    });
+  }, [historyIndex]);
+
+  useEffect(() => {
+    if (history.length === 0) {
+      pushToHistory(prompt, state.settings, state.negativePrompt);
+    }
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0) {
+      isUndoRedoing.current = true;
+      const prevIndex = historyIndex - 1;
+      const prevState = history[prevIndex];
+      
+      setPrompt(prevState.prompt);
+      setState(prev => ({ 
+        ...prev, 
+        settings: prevState.settings, 
+        negativePrompt: prevState.negativePrompt 
+      }));
+      setHistoryIndex(prevIndex);
+      
+      setTimeout(() => { isUndoRedoing.current = false; }, 50);
+    }
+  }, [history, historyIndex]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      isUndoRedoing.current = true;
+      const nextIndex = historyIndex + 1;
+      const nextState = history[nextIndex];
+      
+      setPrompt(nextState.prompt);
+      setState(prev => ({ 
+        ...prev, 
+        settings: nextState.settings, 
+        negativePrompt: nextState.negativePrompt 
+      }));
+      setHistoryIndex(nextIndex);
+
+      setTimeout(() => { isUndoRedoing.current = false; }, 50);
+    }
+  }, [history, historyIndex]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        if (e.shiftKey) { handleRedo(); } else { handleUndo(); }
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
 
   useEffect(() => {
     const checkKey = async () => {
@@ -42,15 +130,6 @@ const App: React.FC = () => {
     checkKey();
   }, []);
 
-  // Neural Memory self-learning logic
-  useEffect(() => {
-    if (state.promptHistory.length > 0 && state.promptHistory.length % 2 === 0) {
-      extractNeuralMemory(state.promptHistory).then(memory => {
-        if (memory) setNeuralMemory(memory);
-      });
-    }
-  }, [state.promptHistory]);
-
   const handleOpenKeySelector = async () => {
     if (window.aistudio) {
       await window.aistudio.openSelectKey();
@@ -59,13 +138,17 @@ const App: React.FC = () => {
   };
 
   const startModeSelection = (mode: AppMode) => {
-    setPendingMode(mode);
-    setShowSeedModal(true);
+    if (mode === AppMode.ON_THE_GO) {
+      setState(prev => ({ ...prev, currentMode: mode }));
+    } else {
+      setPendingMode(mode);
+      setShowSeedModal(true);
+    }
   };
 
-  const handleCreateSeed = (imageData: string, name: string) => {
-    const id = `Avatar_Seed_${String(state.seeds.length + 1).padStart(3, '0')}`;
-    const newSeed: AvatarSeed = { id, imageData, name };
+  const handleCreateSeed = (imageData: string, name: string, tags: string[]) => {
+    const id = `Seed_${String(state.seeds.length + 1).padStart(3, '0')}`;
+    const newSeed: AvatarSeed = { id, imageData, name, tags };
     setState(prev => ({ ...prev, seeds: [...prev.seeds, newSeed] }));
     if (pendingMode) setState(prev => ({ ...prev, currentMode: pendingMode }));
     setShowSeedModal(false);
@@ -92,7 +175,7 @@ const App: React.FC = () => {
     setLastGeneratedImage(null);
   };
 
-  const handleGenerate = async (prompt: string, images: string[], determinedRatio?: string) => {
+  const handleGenerate = async (finalPrompt: string, images: string[], determinedRatio?: string) => {
     if (!state.isKeySelected) {
       alert("Please select a Pro API Key first.");
       return;
@@ -101,25 +184,35 @@ const App: React.FC = () => {
     setIsLoading(true);
     try {
       const finalRatio = determinedRatio || (state.settings.aspectRatio === "Original" ? "1:1" : state.settings.aspectRatio);
-
-      const response = await generateImage(prompt, images, {
+      const response = await generateImage(finalPrompt, images, {
         temperature: state.settings.temperature,
-        aspectRatio: finalRatio,
-        imageSize: state.settings.imageSize,
+        aspectRatio: finalRatio as any,
+        imageSize: state.settings.imageSize as any,
         faceFidelity: state.settings.faceFidelity,
+        strictness: state.settings.strictness,
         negativePrompt: state.negativePrompt,
         memoryContext: neuralMemory
       });
 
       if (response.images && response.images.length > 0) {
-        setLastGeneratedImage(response.images[0]);
-        // Update history for memory
-        setState(prev => ({ ...prev, promptHistory: [...prev.promptHistory, prompt].slice(-10) }));
-      } else {
-        alert("Synthesis complete, but no image data returned.");
+        const newImg = response.images[0];
+        setLastGeneratedImage(newImg);
+        
+        const galleryItem: GalleryItem = {
+          url: newImg,
+          prompt: finalPrompt,
+          settings: JSON.parse(JSON.stringify(state.settings)),
+          timestamp: Date.now()
+        };
+
+        setState(prev => ({ 
+          ...prev, 
+          promptHistory: [...prev.promptHistory, finalPrompt].slice(-10),
+          generatedGallery: [galleryItem, ...prev.generatedGallery].slice(0, 50)
+        }));
       }
     } catch (error: any) {
-      alert("Generation failed: " + (error.message || "Unknown error"));
+      alert("Synthesis Issue: " + (error.message || "An error occurred."));
     } finally {
       setIsLoading(false);
     }
@@ -138,11 +231,6 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-8">
-          {neuralMemory && (
-            <div className="hidden lg:flex items-center gap-3 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[10px] text-blue-400 font-black uppercase animate-pulse">
-              <Sparkles size={14} /> Neural Memory Active
-            </div>
-          )}
           <button 
             onClick={handleOpenKeySelector}
             className={`flex items-center gap-2.5 px-6 py-2.5 rounded-full text-[11px] font-black tracking-[0.2em] transition-all border ${
@@ -151,25 +239,55 @@ const App: React.FC = () => {
               : 'border-yellow-500/50 bg-yellow-500 text-[#05080f] hover:scale-105 shadow-[0_0_25px_rgba(234,179,8,0.2)]'
             }`}
           >
-            PRO ACTIVE
+            {state.isKeySelected ? 'PRO ACTIVE' : 'SELECT PRO KEY'}
           </button>
         </div>
       </header>
 
       <main className="flex-1 relative">
-        {state.currentMode === AppMode.LANDING ? (
-          <LandingPage onSelectMode={startModeSelection} />
-        ) : (
+        {state.currentMode === AppMode.LANDING && <LandingPage onSelectMode={startModeSelection} />}
+        
+        {state.currentMode === AppMode.ON_THE_GO && (
+          <OnTheGoWorkspace 
+            seeds={state.seeds} 
+            settings={state.settings}
+            onUpdateSettings={(s) => setState(prev => ({ ...prev, settings: s }))}
+            onBackToHome={handleBackToHome}
+            isKeySelected={state.isKeySelected}
+            onAddSeed={(d, n, t) => {
+              const id = `Seed_${String(state.seeds.length + 1).padStart(3, '0')}`;
+              setState(prev => ({ ...prev, seeds: [...prev.seeds, { id, imageData: d, name: n, tags: t }] }));
+            }}
+            gallery={state.generatedGallery}
+          />
+        )}
+
+        {(state.currentMode === AppMode.SINGLE_PLAY || state.currentMode === AppMode.GROUP_PHOTO) && (
           <EditorWorkspace 
             mode={state.currentMode}
             settings={state.settings}
             negativePrompt={state.negativePrompt}
+            prompt={prompt}
+            canUndo={historyIndex > 0}
+            canRedo={historyIndex < history.length - 1}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            onUpdatePrompt={(p) => setPrompt(p)}
+            onCommitPrompt={(p) => pushToHistory(p, state.settings, state.negativePrompt)}
             neuralMemory={neuralMemory}
-            onUpdateSettings={(s) => setState(prev => ({ ...prev, settings: s }))}
-            onUpdateNegativePrompt={(np) => setState(prev => ({ ...prev, negativePrompt: np }))}
+            onUpdateSettings={(s) => {
+              setState(prev => ({ ...prev, settings: s }));
+              pushToHistory(prompt, s, state.negativePrompt);
+            }}
+            onUpdateNegativePrompt={(np) => {
+              setState(prev => ({ ...prev, negativePrompt: np }));
+              pushToHistory(prompt, state.settings, np);
+            }}
             onGenerate={handleGenerate}
             isLoading={isLoading}
             previewImage={lastGeneratedImage}
+            onSelectFromGallery={(img) => setLastGeneratedImage(img)}
+            gallery={state.generatedGallery}
             seeds={state.seeds}
             onBackToHome={handleBackToHome}
             onRemoveSeed={handleRemoveSeed}
