@@ -6,7 +6,7 @@ import LandingPage from './components/LandingPage.tsx';
 import EditorWorkspace from './components/EditorWorkspace.tsx';
 import OnTheGoWorkspace from './components/OnTheGoWorkspace.tsx';
 import SeedPromptModal from './components/SeedPromptModal.tsx';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, BrainCircuit, Activity, X, Terminal, Database, Radio } from 'lucide-react';
 
 interface HistoryState {
   prompt: string;
@@ -22,13 +22,15 @@ const App: React.FC = () => {
     settings: {
       temperature: 0.8, 
       variation: 0.5,
-      faceFidelity: 0.85, 
+      faceFidelity: 0.95, 
       strictness: 0.7,
       aspectRatio: "Original",
       numberOfImages: 1,
       imageSize: "1K",
       cameraAngle: "Default",
-      pose: "Default"
+      pose: "Default",
+      enableFilmGrain: false,
+      stylePreset: "Cinematic (Default)"
     },
     negativePrompt: '',
     promptHistory: [],
@@ -45,6 +47,27 @@ const App: React.FC = () => {
   const [pendingMode, setPendingMode] = useState<AppMode | null>(null);
   const [lastGeneratedImage, setLastGeneratedImage] = useState<string | null>(null);
   const [neuralMemory, setNeuralMemory] = useState<string>('');
+  const [showMemoryLog, setShowMemoryLog] = useState(false);
+  
+  // State to pass newly created seed image to workspace for auto-filling
+  const [autoFillImage, setAutoFillImage] = useState<string | null>(null);
+
+  // Machine Learning Loop: Extract memory from history
+  useEffect(() => {
+    if (state.currentMode === AppMode.PORTRAIT_GENERATOR || state.currentMode === AppMode.GROUP_PHOTO) {
+      const learnFromHistory = async () => {
+        if (state.promptHistory.length > 0) {
+          console.log("Neural Engine: Consolidating memory...");
+          const memory = await extractNeuralMemory(state.promptHistory);
+          if (memory) {
+            console.log("Neural Engine: Memory Updated.", memory);
+            setNeuralMemory(memory);
+          }
+        }
+      };
+      learnFromHistory();
+    }
+  }, [state.promptHistory.length, state.currentMode]);
 
   const pushToHistory = useCallback((p: string, s: GenSettings, np: string) => {
     if (isUndoRedoing.current) return;
@@ -138,18 +161,35 @@ const App: React.FC = () => {
   };
 
   const startModeSelection = (mode: AppMode) => {
-    if (mode === AppMode.ON_THE_GO) {
+    if (mode === AppMode.LANDING) return;
+    
+    // Portrait Generator skips the initial Seed Modal
+    if (mode === AppMode.PORTRAIT_GENERATOR) {
       setState(prev => ({ ...prev, currentMode: mode }));
-    } else {
+      return;
+    }
+    
+    // Group Photo now REQUIRES the initial Seed Modal as per user request
+    if (mode === AppMode.GROUP_PHOTO) {
       setPendingMode(mode);
       setShowSeedModal(true);
+      return;
     }
+    
+    // Single Play also uses seed modal usually, or can skip.
+    setState(prev => ({ ...prev, currentMode: mode }));
   };
 
   const handleCreateSeed = (imageData: string, name: string, tags: string[]) => {
     const id = `Seed_${String(state.seeds.length + 1).padStart(3, '0')}`;
     const newSeed: AvatarSeed = { id, imageData, name, tags };
     setState(prev => ({ ...prev, seeds: [...prev.seeds, newSeed] }));
+    
+    // Auto-fill logic for Group Photo: capture the image to populate Slot 1
+    if (pendingMode === AppMode.GROUP_PHOTO) {
+      setAutoFillImage(imageData);
+    }
+    
     if (pendingMode) setState(prev => ({ ...prev, currentMode: pendingMode }));
     setShowSeedModal(false);
   };
@@ -173,7 +213,21 @@ const App: React.FC = () => {
   const handleBackToHome = () => {
     setState(prev => ({ ...prev, currentMode: AppMode.LANDING }));
     setLastGeneratedImage(null);
+    setAutoFillImage(null);
   };
+
+  const onAddToGallery = useCallback((url: string, promptText: string) => {
+    const galleryItem: GalleryItem = {
+      url,
+      prompt: promptText,
+      settings: JSON.parse(JSON.stringify(state.settings)),
+      timestamp: Date.now()
+    };
+    setState(prev => ({
+      ...prev,
+      generatedGallery: [galleryItem, ...prev.generatedGallery].slice(0, 50)
+    }));
+  }, [state.settings]);
 
   const handleGenerate = async (finalPrompt: string, images: string[], determinedRatio?: string) => {
     if (!state.isKeySelected) {
@@ -191,24 +245,20 @@ const App: React.FC = () => {
         faceFidelity: state.settings.faceFidelity,
         strictness: state.settings.strictness,
         negativePrompt: state.negativePrompt,
-        memoryContext: neuralMemory
+        memoryContext: neuralMemory,
+        enableFilmGrain: state.settings.enableFilmGrain,
+        mode: state.currentMode,
+        stylePreset: state.settings.stylePreset // Passing new style preset
       });
 
       if (response.images && response.images.length > 0) {
         const newImg = response.images[0];
         setLastGeneratedImage(newImg);
+        onAddToGallery(newImg, finalPrompt);
         
-        const galleryItem: GalleryItem = {
-          url: newImg,
-          prompt: finalPrompt,
-          settings: JSON.parse(JSON.stringify(state.settings)),
-          timestamp: Date.now()
-        };
-
         setState(prev => ({ 
           ...prev, 
-          promptHistory: [...prev.promptHistory, finalPrompt].slice(-10),
-          generatedGallery: [galleryItem, ...prev.generatedGallery].slice(0, 50)
+          promptHistory: [...prev.promptHistory, finalPrompt].slice(-10)
         }));
       }
     } catch (error: any) {
@@ -217,6 +267,9 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Check if we should render EditorWorkspace (for Portrait & Group Photo)
+  const isEditorMode = state.currentMode === AppMode.PORTRAIT_GENERATOR || state.currentMode === AppMode.GROUP_PHOTO;
 
   return (
     <div className="flex flex-col h-screen bg-[#05080f] text-slate-100 overflow-hidden font-sans selection:bg-yellow-500/30">
@@ -231,6 +284,35 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-8">
+          {/* Live Learning Indicator - ONLY for Editor Modes */}
+          {isEditorMode && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900/50 rounded-lg border border-white/5">
+               <Radio size={14} className={neuralMemory ? "text-red-500 animate-pulse" : "text-slate-600"} />
+               <span className={`text-[9px] font-black uppercase tracking-widest ${neuralMemory ? "text-slate-200" : "text-slate-600"}`}>
+                 Live Learning
+               </span>
+            </div>
+          )}
+
+          {isEditorMode && (
+            <button 
+              onClick={() => setShowMemoryLog(true)}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-full transition-all group cursor-pointer animate-in fade-in ${
+                neuralMemory 
+                  ? 'bg-yellow-500/10 border-yellow-500/20 hover:bg-yellow-500/20' 
+                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+              }`}
+              title="View Learning Logs"
+            >
+                <div className="relative">
+                   <BrainCircuit size={14} className={neuralMemory ? "text-yellow-500 group-hover:scale-110 transition-transform" : "text-slate-500"} />
+                   {neuralMemory && <div className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-500 rounded-full animate-ping opacity-75" />}
+                </div>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${neuralMemory ? "text-yellow-500" : "text-slate-500"}`}>
+                  {neuralMemory ? "Neural Active" : "Neural Online"}
+                </span>
+            </button>
+          )}
           <button 
             onClick={handleOpenKeySelector}
             className={`flex items-center gap-2.5 px-6 py-2.5 rounded-full text-[11px] font-black tracking-[0.2em] transition-all border ${
@@ -247,22 +329,7 @@ const App: React.FC = () => {
       <main className="flex-1 relative">
         {state.currentMode === AppMode.LANDING && <LandingPage onSelectMode={startModeSelection} />}
         
-        {state.currentMode === AppMode.ON_THE_GO && (
-          <OnTheGoWorkspace 
-            seeds={state.seeds} 
-            settings={state.settings}
-            onUpdateSettings={(s) => setState(prev => ({ ...prev, settings: s }))}
-            onBackToHome={handleBackToHome}
-            isKeySelected={state.isKeySelected}
-            onAddSeed={(d, n, t) => {
-              const id = `Seed_${String(state.seeds.length + 1).padStart(3, '0')}`;
-              setState(prev => ({ ...prev, seeds: [...prev.seeds, { id, imageData: d, name: n, tags: t }] }));
-            }}
-            gallery={state.generatedGallery}
-          />
-        )}
-
-        {(state.currentMode === AppMode.SINGLE_PLAY || state.currentMode === AppMode.GROUP_PHOTO) && (
+        {isEditorMode && (
           <EditorWorkspace 
             mode={state.currentMode}
             settings={state.settings}
@@ -292,9 +359,70 @@ const App: React.FC = () => {
             onBackToHome={handleBackToHome}
             onRemoveSeed={handleRemoveSeed}
             onRenameSeed={handleRenameSeed}
+            // Pass the auto-fill image if available
+            autoFillImage={autoFillImage}
+            onAutoFillConsumed={() => setAutoFillImage(null)}
+          />
+        )}
+
+        {state.currentMode === AppMode.SINGLE_PLAY && (
+          <OnTheGoWorkspace 
+            seeds={state.seeds}
+            settings={state.settings}
+            onUpdateSettings={(s) => setState(prev => ({ ...prev, settings: s }))}
+            onBackToHome={handleBackToHome}
+            onAddSeed={handleCreateSeed}
+            isKeySelected={state.isKeySelected}
+            gallery={state.generatedGallery}
+            onAddToGallery={onAddToGallery}
           />
         )}
       </main>
+
+      {/* Neural Memory Log Modal (Relevant for both Editor Modes) */}
+      {showMemoryLog && isEditorMode && (
+        <div className="fixed inset-0 z-[3000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in">
+           <div className="w-full max-w-2xl bg-[#0a0f1d] border border-yellow-500/30 rounded-[2rem] overflow-hidden shadow-[0_0_50px_rgba(234,179,8,0.1)] flex flex-col">
+              <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-yellow-500/5">
+                 <div className="flex items-center gap-3">
+                    <Terminal size={18} className="text-yellow-500" />
+                    <h3 className="text-sm font-black text-white uppercase tracking-widest">Neural Latent State</h3>
+                 </div>
+                 <button onClick={() => setShowMemoryLog(false)} className="p-2 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-all"><X size={18} /></button>
+              </div>
+              
+              <div className="p-8 font-mono text-xs leading-relaxed text-slate-300 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                 <div className="flex items-center gap-3 text-emerald-500 mb-2">
+                    <Activity size={14} className="animate-pulse" />
+                    <span className="font-bold uppercase tracking-widest">System Online • Learning Active</span>
+                 </div>
+                 
+                 <div className="p-4 bg-black/40 rounded-xl border border-white/5">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                       <Database size={12} />
+                       Memory Dump
+                    </div>
+                    {neuralMemory ? (
+                      <div className="whitespace-pre-wrap text-yellow-500/90 font-medium">
+                        {neuralMemory}
+                      </div>
+                    ) : (
+                      <div className="text-slate-600 italic">Initializing latent capture... Provide more prompts to begin learning.</div>
+                    )}
+                 </div>
+                 
+                 <div className="text-[10px] text-slate-500">
+                    <p>LOG_ID: {Date.now()}</p>
+                    <p>STATUS: Watching input stream for correction patterns.</p>
+                 </div>
+              </div>
+              
+              <div className="p-4 bg-white/5 border-t border-white/5 flex justify-end">
+                 <button onClick={() => setShowMemoryLog(false)} className="px-6 py-2 bg-yellow-500 text-[#05080f] font-black uppercase text-[10px] tracking-widest rounded-lg hover:bg-yellow-400 transition-colors">Close Log</button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {showSeedModal && <SeedPromptModal onConfirm={handleCreateSeed} onCancel={skipSeedModal} />}
     </div>

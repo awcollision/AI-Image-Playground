@@ -3,7 +3,7 @@ export enum AppMode {
   LANDING = 'LANDING',
   SINGLE_PLAY = 'SINGLE_PLAY',
   GROUP_PHOTO = 'GROUP_PHOTO',
-  ON_THE_GO = 'ON_THE_GO'
+  PORTRAIT_GENERATOR = 'PORTRAIT_GENERATOR'
 }
 
 export enum IntelligenceMode {
@@ -41,6 +41,8 @@ export interface GenSettings {
   imageSize: ValidImageSize;
   cameraAngle: string;
   pose: string;
+  enableFilmGrain: boolean;
+  stylePreset: string;
 }
 
 export interface GalleryItem {

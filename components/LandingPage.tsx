@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { AppMode } from '../types';
-import { Image as ImageIcon, Users, Zap, MessageSquare } from 'lucide-react';
+import { Image as ImageIcon, Users, Zap, UserCircle, Fingerprint } from 'lucide-react';
 
 interface Props {
   onSelectMode: (mode: AppMode) => void;
@@ -15,37 +15,37 @@ const LandingPage: React.FC<Props> = ({ onSelectMode }) => {
           AI IMAGE <span className="text-yellow-500">PLAYGROUND</span>
         </h2>
         <p className="text-slate-400 text-lg font-medium leading-relaxed">
-          Create, composite, and manipulate images with professional-grade identity consistency.
+          The world's most advanced biometric synthesis suite. Total control over identity, anatomy, and cinematic style.
         </p>
       </div>
 
       <div className="grid md:grid-cols-3 gap-8 w-full max-w-6xl">
         <ModeCard 
           title="Single Play"
-          description="Edit a single photograph. Swap styles, backgrounds, or items."
+          description="Edit a single photograph. Swap styles, backgrounds, or cinematic lighting."
           icon={<ImageIcon size={32} />}
           onClick={() => onSelectMode(AppMode.SINGLE_PLAY)}
           color="yellow"
         />
         <ModeCard 
+          title="Portrait Generator"
+          description="High-fidelity biometric reconstruction. Combine up to 10 references for perfect facial likeness."
+          icon={<Fingerprint size={32} />}
+          onClick={() => onSelectMode(AppMode.PORTRAIT_GENERATOR)}
+          color="green"
+        />
+        <ModeCard 
           title="Group Photo"
-          description="Combine subjects from different photos into a single cohesive shot."
+          description="Combine subjects from different photos into a single cohesive shot with anatomical precision."
           icon={<Users size={32} />}
           onClick={() => onSelectMode(AppMode.GROUP_PHOTO)}
           color="blue"
-        />
-        <ModeCard 
-          title="On the Go"
-          description="Chat with Google-backed intelligence. Analyze locations and generate from search data."
-          icon={<MessageSquare size={32} />}
-          onClick={() => onSelectMode(AppMode.ON_THE_GO)}
-          color="green"
         />
       </div>
 
       <div className="mt-20 flex items-center gap-8 opacity-40 grayscale pointer-events-none">
         <Zap size={20} />
-        <span className="text-xs font-bold tracking-[0.3em] uppercase text-white">Powered by Nano Banana Pro</span>
+        <span className="text-xs font-bold tracking-[0.3em] uppercase text-white">Neural Rig v3.0 Powered by Gemini</span>
         <Zap size={20} />
       </div>
     </div>
