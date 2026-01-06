@@ -223,7 +223,8 @@ const OnTheGoWorkspace: React.FC<Props> = ({
           temperature: settings.temperature,
           faceFidelity: settings.faceFidelity,
           strictness: settings.strictness,
-          searchContext: lastSearchContext 
+          // Fixed property from searchContext to memoryContext
+          memoryContext: lastSearchContext 
         });
 
         const botMessage: Message = {
