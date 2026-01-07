@@ -10,76 +10,16 @@ export async function extractNeuralMemory(history: string[]): Promise<string> {
   if (!key || history.length === 0) return "Awaiting input for latent extraction...";
   const ai = new GoogleGenAI({ apiKey: key });
   
-  const instruction = `SYSTEM: BIOMETRIC ANCHOR
-  Analyze history for identity traits. Focus on preservation of names and facial structure.
-  DATA: ${history.join(' | ')}
-  OUTPUT: Technical summary of identity constraints.`;
+  const instruction = `Summarize the visual style, recurrent subjects, and specific constraints (e.g. 'always full sleeves') in these prompts: ${history.join(' | ')}`;
 
   try {
     const response = await ai.models.generateContent({
-      model: REASONING_MODEL,
+      model: TEXT_MODEL,
       contents: instruction,
-      config: { temperature: 0.1, thinkingConfig: { thinkingBudget: 2048 } }
     });
-    return response.text?.trim() || "Biometric pattern locked.";
+    return response.text?.trim() || "Identity context established.";
   } catch (e) {
     return "Neural buffer sync error.";
-  }
-}
-
-async function optimizePromptWithReasoning(
-  userPrompt: string, 
-  memory: string, 
-  settings: { strictness: number; faceFidelity: number; temperature: number; variation: number; stylePreset?: string }
-): Promise<string> {
-  const key = process.env.API_KEY;
-  if (!key) return userPrompt;
-  const ai = new GoogleGenAI({ apiKey: key });
-
-  // UPDATED LOGIC: Strict Spatial & Identity Enforcement
-  const instruction = `SYSTEM: SPATIAL DIRECTOR & IDENTITY GUARDIAN
-  USER REQUEST: "${userPrompt}"
-  ENGINE PARAMS: Face Fidelity: ${settings.faceFidelity}, Strictness: ${settings.strictness}
-
-  CRITICAL OBJECTIVES:
-  1. SPATIAL OBEDIENCE (HIGHEST PRIORITY): 
-     - If user says "Left", place subject on the LEFT side of the frame.
-     - If user says "Right", place subject on the RIGHT side of the frame.
-     - If user says "Far" or "Distance", scale the subject DOWN to simulate depth. Do NOT place them in the foreground.
-     - If user says "Close", place them in foreground.
-     - IF A SPATIAL INSTRUCTION EXISTS, IT IS LAW. Do not auto-center the subject.
-
-  2. IDENTITY LOCK: 
-     - The @seed identity (face) MUST NOT CHANGE. Do not blend their face with people already in the background.
-     - Treat the identity as a rigid asset.
-  
-  3. PROMPT LITERALISM:
-     - ONLY do what is asked.
-     - If the prompt does NOT mention smiling, do NOT add a smile.
-     - If the prompt does NOT mention looking at the camera, do NOT force eye contact.
-     - Respect "Non-Negotiables" implicitly.
-
-  4. PHOTOREALISM:
-     - Match lighting direction and hardness/softness of the base image exactly.
-     - Match noise/grain.
-  
-  OUTPUT FORMAT:
-  Produce a structured technical prompt for the generator that explicitly defines:
-  - COMPOSITION: [Exact coordinates/placement]
-  - SCALE: [Distance from camera]
-  - LIGHTING: [Direction, Temp, Hardness]
-  - SUBJECT: [Identity, Clothing, Pose]
-  - NEGATIVE: [What to avoid]`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: REASONING_MODEL,
-      contents: instruction,
-      config: { temperature: 0.1, thinkingConfig: { thinkingBudget: 4096 } }
-    });
-    return response.text?.trim() || userPrompt;
-  } catch (e) {
-    return userPrompt;
   }
 }
 
@@ -100,39 +40,82 @@ export async function generateImage(
   const key = process.env.API_KEY;
   if (!key) throw new Error("API Key required.");
   const ai = new GoogleGenAI({ apiKey: key });
+
+  // --- FORENSIC ANATOMY & PHYSICS LAYER ---
   
-  const optimizedPrompt = await optimizePromptWithReasoning(prompt, config.memoryContext || "", {
-    strictness: config.strictness ?? 0.8,
-    faceFidelity: config.faceFidelity ?? 0.9,
-    temperature: config.temperature ?? 0.8,
-    variation: config.variation ?? 0.5,
-    stylePreset: config.stylePreset
-  });
+  // 1. Temperature Control: Lower temperature significantly for high strictness to prevent hallucinations (6 fingers, long arms).
+  const effectiveTemperature = (config.strictness && config.strictness > 0.85) ? 0.20 : (config.temperature ?? 0.6);
+
+  // 2. Texture & Lighting Physics (Fixes "Plastic Skin")
+  // We force Subsurface Scattering (SSS) to make skin look organic, not like a doll.
+  const physicsPrompt = `
+    [PHYSICS ENGINE]
+    - SKIN TEXTURE: Apply Subsurface Scattering (SSS). Skin must absorb and scatter light. NO PLASTIC/WAXY SHINE. 
+    - MICRO-DETAILS: Visible pores, slight skin imperfections, natural skin texture. Match the ISO noise of the background.
+    - LIGHTING: Directional lighting must match the base image source (Sun/Window). Shadows must fall in the same direction as the Mother's shadows.
+  `;
+
+  // 3. Anatomical Anchors (Fixes Eyes, Ring, Mouth)
+  const anatomyPrompt = `
+    [FORENSIC ANATOMY RULES - CRITICAL]
+    1. **EYES (GAZE LOCK)**: 
+       - STRABISMUS CHECK: Both pupils MUST focus on the exact same point (Camera Lens). 
+       - No wandering eyes. Irises must be symmetrical.
+    2. **MOUTH (LIP SEAL)**: 
+       - If prompt says "closed mouth" or "slight smile": UPPER AND LOWER LIPS MUST TOUCH. 
+       - **ABSOLUTELY NO TEETH VISIBLE.**
+       - Expression: Calm, pleasant, sealed lips.
+    3. **HANDS & JEWELRY**:
+       - Ring Location: **RIGHT HAND, RING FINGER ONLY**. (The finger between the little finger and middle finger).
+       - Do not put rings on the Index finger.
+       - EXACTLY 5 FINGERS. No hallucinations.
+    4. **HAIR**:
+       - Voluminous, natural flow. Match the density of the Identity Seed.
+    
+    [CLOTHING PHYSICS]
+    - **SLEEVES**: If "Kurta" or "Suit" is specified, sleeves must be **LONG (WRIST LENGTH)**. Fabric should bunch naturally at the wrist.
+  `;
+
+  // 4. Protection Layer (Fixes Mother's Face Changing)
+  const protectionPrompt = `
+    [BASE IMAGE PROTECTION]
+    - **DO NOT MODIFY THE MOTHER**. The person currently in the photo (Mother) is anchors. Do not smooth her face, do not change her lighting.
+    - Insert the new subject (Pari) *around* the Mother without touching the Mother's pixels.
+  `;
+
+  const finalPrompt = `
+    Role: Senior VFX Compositor. Task: Photorealistic Subject Insertion.
+
+    USER INSTRUCTION: "${prompt}"
+
+    ${protectionPrompt}
+    ${anatomyPrompt}
+    ${physicsPrompt}
+
+    SPATIAL INSTRUCTION:
+    - Subject (Pari) is standing to the LEFT of the Mother.
+    - Distance: Maintain a distinct gap (approx 1.5 feet). DO NOT OVERLAP BODIES unless specified.
+    - Height: Subject is slightly taller than Mother (Natural scale).
+
+    ${config.memoryContext ? `NEURAL MEMORY: ${config.memoryContext}` : ""}
+    
+    FINAL RENDER CHECK:
+    - Are teeth invisible? (Yes/No) -> Must be Yes.
+    - Is the ring on the Right Ring Finger? (Yes/No) -> Must be Yes.
+    - Is the Mother's face unchanged? (Yes/No) -> Must be Yes.
+  `;
 
   const parts: any[] = images.map(img => ({
     inlineData: { data: img.split(',')[1] || img, mimeType: 'image/jpeg' }
   }));
 
-  // UPDATED PROMPT STRUCTURE: Forced Adherence
-  parts.push({ text: `
-    TASK: STRICT PHOTOREALISTIC COMPOSITING
-    
-    EXECUTION PLAN:
-    ${optimizedPrompt}
-    
-    ABSOLUTE LAWS:
-    1. SPATIAL ACCURACY: If the plan says "Right", the subject MUST be on the right. If "Far", they MUST be small/distant.
-    2. IDENTITY PRESERVATION: The face from the seed image must be preserved with 100% fidelity. Do not warp or "beautify" it into a generic AI face.
-    3. NO HALLUCINATIONS: Do not add accessories, smiles, or poses not requested in the prompt.
-    4. LIGHTING MATCH: Lighting on the subject must perfectly match the background plate (direction, intensity, color).
-    5. BLENDING: Subject edges must blur/grain match the background quality.
-  ` });
+  parts.push({ text: finalPrompt.trim() });
 
   const response = await ai.models.generateContent({
     model: IMAGE_MODEL,
     contents: { parts },
     config: {
-      temperature: config.temperature ?? 0.7, 
+      temperature: effectiveTemperature, 
       imageConfig: {
         aspectRatio: (config.aspectRatio === "Original" ? "16:9" : config.aspectRatio || "1:1") as any,
         imageSize: (config.imageSize || "1K") as any

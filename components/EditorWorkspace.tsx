@@ -123,6 +123,16 @@ const EditorWorkspace: React.FC<Props> = ({
   const openEditor = (dataUrl: string, idx: number) => {
     setEditingImage(dataUrl);
     setUploadSlotIdx(idx);
+    // Reset editor state
+    setEditorRotation(0);
+    setEditorFlipH(false);
+    setEditorBrightness(100);
+    setEditorExposure(100);
+    setEditorSharpness(0);
+    setCropT(0);
+    setCropB(0);
+    setCropL(0);
+    setCropR(0);
   };
 
   const finalizeEditing = (modeAction: 'save' | 'reuse' = 'save') => {
@@ -131,17 +141,36 @@ const EditorWorkspace: React.FC<Props> = ({
     const ctx = canvas.getContext('2d');
     const img = new Image();
     img.onload = () => {
+      // Calculate dimensions of the cropped area in source image coordinates
       const sourceW = img.width * (1 - (cropL + cropR) / 100);
       const sourceH = img.height * (1 - (cropT + cropB) / 100);
+      const startX = (cropL / 100) * img.width;
+      const startY = (cropT / 100) * img.height;
+
+      // Set canvas to the aspect ratio of the CROP
       canvas.width = sourceW;
       canvas.height = sourceH;
+      
       ctx!.save();
+      
+      // Apply filters
       ctx!.filter = `brightness(${editorBrightness}%) contrast(${editorExposure}%) grayscale(${editorSharpness < 0 ? Math.abs(editorSharpness) : 0}%)`;
+      
+      // Move to center of canvas to perform rotation/flip
       ctx!.translate(sourceW / 2, sourceH / 2);
       ctx!.rotate((editorRotation * Math.PI) / 180);
       if (editorFlipH) ctx!.scale(-1, 1);
-      ctx!.drawImage(img, (cropL/100)*img.width, (cropT/100)*img.height, sourceW, sourceH, -sourceW/2, -sourceH/2, sourceW, sourceH);
+      
+      // Draw the image, shifted so the cropped center aligns with canvas center
+      // drawImage(img, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
+      ctx!.drawImage(
+        img, 
+        startX, startY, sourceW, sourceH, // Source crop
+        -sourceW / 2, -sourceH / 2, sourceW, sourceH // Destination on canvas (centered)
+      );
+      
       ctx!.restore();
+      
       const dataUrl = canvas.toDataURL('image/jpeg', 0.98);
       if (modeAction === 'reuse') {
         reuseImage(dataUrl);
@@ -530,7 +559,17 @@ const EditorWorkspace: React.FC<Props> = ({
             <div className="w-full max-w-7xl h-[92vh] bg-[#05080f] border border-white/10 rounded-[4rem] flex overflow-hidden shadow-2xl">
               <div className="flex-1 flex flex-col border-r border-white/5 bg-black/20">
                 <div className="px-10 py-6 border-b border-white/5 flex items-center justify-between bg-white/5 backdrop-blur-md"><div className="flex items-center gap-4"><Scissors size={24} className="text-yellow-500" /><h3 className="text-xl font-black text-white uppercase italic tracking-tight">Biometric Refiner Pro</h3></div><button onClick={() => setEditingImage(null)} className="p-3 hover:bg-red-500/20 rounded-full text-slate-400 hover:text-red-500 transition-all"><X size={24} /></button></div>
-                <div className="flex-1 flex items-center justify-center p-12 overflow-hidden relative"><img src={editingImage} className="max-w-full max-h-[60vh] object-contain shadow-2xl transition-all" style={{ filter: `brightness(${editorBrightness}%) contrast(${editorExposure}%) grayscale(${editorSharpness < 0 ? Math.abs(editorSharpness) : 0}%)`, transform: `rotate(${editorRotation}deg) scaleX(${editorFlipH ? -1 : 1})` }} /></div>
+                <div className="flex-1 flex items-center justify-center p-12 overflow-hidden relative">
+                    <img 
+                      src={editingImage} 
+                      className="max-w-full max-h-[60vh] object-contain shadow-2xl transition-all" 
+                      style={{ 
+                          filter: `brightness(${editorBrightness}%) contrast(${editorExposure}%) grayscale(${editorSharpness < 0 ? Math.abs(editorSharpness) : 0}%)`, 
+                          transform: `rotate(${editorRotation}deg) scaleX(${editorFlipH ? -1 : 1})`,
+                          clipPath: `inset(${cropT}% ${cropR}% ${cropB}% ${cropL}%)` // Visual feedback for cropping
+                      }} 
+                    />
+                </div>
                 <div className="p-10 bg-[#0d1324] border-t border-white/5"><div className="grid grid-cols-2 gap-x-12 gap-y-6">{[{ dir: 'Top', val: cropT, set: setCropT }, { dir: 'Bottom', val: cropB, set: setCropB }, { dir: 'Left', val: cropL, set: setCropL }, { dir: 'Right', val: cropR, set: setCropR }].map((c) => (<div key={c.dir} className="space-y-3"><div className="flex justify-between items-center"><span className="text-[10px] font-black text-slate-500 uppercase">{c.dir} Boundary</span><span className="text-[10px] font-black text-yellow-500">{c.val}%</span></div><input type="range" min="0" max="80" step="1" value={c.val} onChange={e => c.set(parseInt(e.target.value))} className="w-full h-1.5 bg-white/5 rounded-full appearance-none accent-yellow-500" /></div>))}</div></div>
               </div>
               <div className="w-[400px] bg-[#0a0f1d] p-10 flex flex-col gap-10">
@@ -547,9 +586,28 @@ const EditorWorkspace: React.FC<Props> = ({
            <div className="w-1/2 flex flex-col border-r border-white/5 p-16 relative bg-[#05080f]">
               <div className="flex items-center justify-between mb-12"><div className="flex items-center gap-6 text-white uppercase italic font-black"><BrainCircuit size={40} className="text-yellow-500" /><h2 className="text-3xl">Latent Weaver Pro</h2></div><button onClick={() => setIsPromptFullscreen(false)} className="p-4 bg-white/5 hover:bg-white/10 rounded-full transition-all"><X size={24}/></button></div>
               <div className="flex-1 relative"><textarea ref={fullscreenTextareaRef} autoFocus value={prompt} onChange={handlePromptChange} className="w-full h-full bg-[#0a0f1d] border border-white/5 rounded-[4rem] p-16 text-3xl text-slate-100 focus:outline-none focus:border-yellow-500/50 resize-none custom-scrollbar font-medium" />{showMentions && <MentionList isFullscreen={true} />}</div>
-              <div className="mt-12"><button onClick={handleMagicClick} disabled={isLoading} className="w-full py-10 bg-yellow-500 text-black font-black uppercase text-xl rounded-[3rem] shadow-2xl transition-all hover:scale-[1.02]">{isLoading ? <Loader2 className="animate-spin" /> : 'Create Vision'}</button></div>
+              <div className="mt-12"><button onClick={handleMagicClick} disabled={isLoading} className="w-full py-10 bg-yellow-500 text-black font-black uppercase text-xl rounded-[3rem] shadow-2xl transition-all hover:scale-[1.02] flex items-center justify-center gap-4">{isLoading ? <Loader2 className="animate-spin" /> : <Sparkles size={24} />} <span>{isLoading ? "Synthesizing..." : "Create Vision"}</span></button></div>
            </div>
-           <div className="w-1/2 flex flex-col bg-black relative p-16"><div className="flex-1 flex items-center justify-center">{previewImage ? <img src={previewImage} className={`max-w-full max-h-full object-contain rounded-[4rem] border border-white/5 transition-all duration-1000 ${isLoading ? 'opacity-30 blur-2xl' : ''}`} /> : <div className="text-slate-900 italic font-black text-6xl tracking-widest uppercase opacity-20">Void Pipeline</div>}</div></div>
+           <div className="w-1/2 flex flex-col bg-black relative p-16">
+              <div className="flex-1 flex items-center justify-center relative">
+                  {previewImage ? (
+                    <div className="relative w-full h-full flex items-center justify-center">
+                        <img src={previewImage} className={`max-w-full max-h-full object-contain rounded-[4rem] border border-white/5 transition-all duration-700 ${isLoading ? 'scale-95' : 'scale-100'}`} />
+                        {isLoading && (
+                           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm rounded-[4rem]">
+                              <div className="relative w-32 h-32 mb-6">
+                                <div className="absolute inset-0 rounded-full border-[6px] border-white/5 border-t-yellow-500 animate-spin" />
+                                <Sparkles size={48} className="text-yellow-500 animate-pulse absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                              </div>
+                              <span className="text-[14px] font-black text-white uppercase tracking-[0.4em]">{Math.round(progress)}% Synthesis</span>
+                           </div>
+                        )}
+                    </div>
+                  ) : (
+                    <div className="text-slate-900 italic font-black text-6xl tracking-widest uppercase opacity-20">Void Pipeline</div>
+                  )}
+              </div>
+           </div>
         </div>
       )}
 
