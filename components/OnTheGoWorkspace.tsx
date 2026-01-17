@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { Message, AvatarSeed, GenSettings, ValidAspectRatio, IntelligenceMode, GalleryItem } from '../types.ts';
+import { Message, AvatarSeed, GenSettings, ValidAspectRatio, IntelligenceMode, GalleryItem, ValidImageSize } from '../types.ts';
 import { chatWithSearch, generateImage } from '../services/geminiService.ts';
 import { 
   Send, Upload, X, Loader2, Sparkles, 
@@ -442,8 +441,16 @@ const OnTheGoWorkspace: React.FC<Props> = ({
                   <div className="space-y-3">
                     <label className="text-[9px] font-black text-slate-500 uppercase flex justify-between tracking-widest">Aspect Ratio <span className="text-[#10b981]">{settings.aspectRatio}</span></label>
                     <div className="grid grid-cols-4 gap-2">
-                      {["1:1", "4:3", "3:4", "16:9"].map(r => (
+                      {["1:1", "1:2", "4:3", "3:4", "16:9", "9:16"].map(r => (
                         <button key={r} onClick={() => onUpdateSettings({...settings, aspectRatio: r as ValidAspectRatio})} className={`py-2 text-[9px] font-black rounded-xl transition-all ${settings.aspectRatio === r ? 'bg-[#10b981] text-[#05080f]' : 'bg-white/5 text-slate-500 hover:text-white'}`}>{r}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[9px] font-black text-slate-500 uppercase flex justify-between tracking-widest">Quality <span className="text-[#10b981]">{settings.imageSize}</span></label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {["1K", "2K", "4K", "8K"].map(q => (
+                        <button key={q} onClick={() => onUpdateSettings({...settings, imageSize: q as ValidImageSize})} className={`py-2 text-[9px] font-black rounded-xl transition-all ${settings.imageSize === q ? 'bg-[#10b981] text-[#05080f]' : 'bg-white/5 text-slate-500 hover:text-white'}`}>{q}</button>
                       ))}
                     </div>
                   </div>

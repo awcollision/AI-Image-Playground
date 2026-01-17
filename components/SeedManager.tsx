@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { AvatarSeed } from '../types';
+import { AvatarSeed } from '../types.ts';
 import { X, Copy, Trash2, ShieldCheck, Sparkles } from 'lucide-react';
 
 interface SeedManagerProps {

@@ -1,3 +1,4 @@
+
 export enum AppMode {
   LANDING = 'LANDING',
   GROUP_PHOTO = 'GROUP_PHOTO',
@@ -28,20 +29,20 @@ export interface Message {
   isSearch?: boolean;
 }
 
-export type ValidAspectRatio = "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "4:5" | "5:4" | "9:16" | "16:9" | "21:9";
-export type ValidImageSize = "1K" | "2K" | "4K";
+export type ValidAspectRatio = "1:1" | "1:2" | "2:3" | "3:2" | "3:4" | "4:3" | "4:5" | "5:4" | "9:16" | "16:9" | "21:9";
+export type ValidImageSize = "1K" | "2K" | "4K" | "8K";
 
 export interface GenSettings {
   temperature: number;
   variation: number;
   faceFidelity: number;
-  strictness: number; // 0 to 1 scale for prompt adherence
+  strictness: number; 
+  microDetailBias: number; // Focus on small objects like pendants/jewelry
   aspectRatio: ValidAspectRatio | "Original";
   numberOfImages: number;
   imageSize: ValidImageSize;
   cameraAngle: string;
   pose: string;
-  enableFilmGrain: boolean;
   stylePreset: string;
 }
 
@@ -50,6 +51,7 @@ export interface GalleryItem {
   prompt: string;
   settings: GenSettings;
   timestamp: number;
+  feedback?: 'like' | 'dislike' | null;
 }
 
 export interface UserState {
@@ -59,5 +61,6 @@ export interface UserState {
   settings: GenSettings;
   negativePrompt: string;
   promptHistory: string[];
-  generatedGallery: GalleryItem[]; // History of all successful generations with metadata
+  generatedGallery: GalleryItem[]; 
+  neuralWeights: string; 
 }

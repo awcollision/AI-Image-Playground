@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Message } from '../types';
+import { Message } from '../types.ts';
 import { Send, Upload, User, Bot, Loader2, Sparkles, X, Download } from 'lucide-react';
 
 interface ChatInterfaceProps {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppMode } from '../types';
+import { AppMode } from '../types.ts';
 import { Users, Zap, Fingerprint, Gem, Layout, Youtube } from 'lucide-react';
 
 interface Props {
@@ -61,28 +61,20 @@ const LandingPage: React.FC<Props> = ({ onSelectMode }) => {
 const ModeCard = ({ title, description, icon, onClick, color }: any) => {
   let colorClass = 'hover:border-yellow-500 group-hover:bg-yellow-500';
   let iconBg = 'bg-yellow-500/10 text-yellow-500';
-  // Default (Yellow) -> Black text on hover
-  let hoverTextClass = 'group-hover:text-black'; 
-  let hoverDescClass = 'group-hover:text-black/80';
+  
+  // Default to White text on hover (Fixes Thumbnail Creator/Yellow)
+  let hoverTextClass = 'group-hover:text-white'; 
+  let hoverDescClass = 'group-hover:text-white/90';
 
   if (color === 'blue') {
     colorClass = 'hover:border-blue-500 group-hover:bg-blue-500';
     iconBg = 'bg-blue-500/10 text-blue-500';
-    // Blue background -> White text on hover
-    hoverTextClass = 'group-hover:text-white';
-    hoverDescClass = 'group-hover:text-white/90';
   } else if (color === 'green') {
     colorClass = 'hover:border-emerald-500 group-hover:bg-emerald-500';
     iconBg = 'bg-emerald-500/10 text-emerald-500';
-    // Green background -> White text on hover
-    hoverTextClass = 'group-hover:text-white';
-    hoverDescClass = 'group-hover:text-white/90';
   } else if (color === 'emerald') {
     colorClass = 'hover:border-emerald-400 group-hover:bg-emerald-400';
     iconBg = 'bg-emerald-400/10 text-emerald-400';
-    // Bright Emerald background -> Black text on hover
-    hoverTextClass = 'group-hover:text-black';
-    hoverDescClass = 'group-hover:text-black/80';
   }
 
   return (
